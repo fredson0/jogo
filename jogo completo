@@ -1,0 +1,239 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.util.*;
+
+public class NumpuzGame {
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new StartScreen());
+    }
+}
+
+class StartScreen extends JFrame {
+    public StartScreen() {
+        setTitle("Numpuz - Escolher Tamanho");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLayout(new BorderLayout());
+        setSize(300, 150);
+        setLocationRelativeTo(null);
+
+        JLabel label = new JLabel("Escolha o tamanho do tabuleiro:");
+        label.setHorizontalAlignment(SwingConstants.CENTER);
+        add(label, BorderLayout.NORTH);
+
+        Integer[] tamanhos = {2, 3, 4, 5, 6, 7, 8};
+        JComboBox<Integer> comboBox = new JComboBox<>(tamanhos);
+        comboBox.setSelectedItem(4);
+        add(comboBox, BorderLayout.CENTER);
+
+        JButton iniciar = new JButton("Iniciar Jogo");
+        add(iniciar, BorderLayout.SOUTH);
+
+        iniciar.addActionListener(e -> {
+            int tamanhoSelecionado = (Integer) comboBox.getSelectedItem();
+            new NumpuzFrame(tamanhoSelecionado);
+            dispose();
+        });
+
+        setVisible(true);
+    }
+}
+
+class NumpuzFrame extends JFrame {
+    private int boardSize;
+
+    public NumpuzFrame(int size) {
+        this.boardSize = size;
+
+        setTitle("Numpuz - Quebra Cabeça Numérico");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLayout(new BorderLayout());
+
+        TimerLabel timerLabel = new TimerLabel();
+        NumpuzPanel gamePanel = new NumpuzPanel(timerLabel, size, this);
+
+        JPanel topPanel = new JPanel(new BorderLayout());
+        topPanel.add(timerLabel, BorderLayout.CENTER);
+
+        JButton desistirButton = new JButton("Desistir");
+        desistirButton.addActionListener(e -> {
+            int confirm = JOptionPane.showConfirmDialog(this, "Deseja realmente desistir?", "Confirmar", JOptionPane.YES_NO_OPTION);
+            if (confirm == JOptionPane.YES_OPTION) {
+                dispose();
+                new StartScreen();
+            }
+        });
+        topPanel.add(desistirButton, BorderLayout.EAST);
+
+        add(topPanel, BorderLayout.NORTH);
+        add(gamePanel, BorderLayout.CENTER);
+
+        JButton reiniciarButton = new JButton("Reiniciar");
+        reiniciarButton.addActionListener(e -> {
+            dispose();
+            new NumpuzFrame(boardSize);
+        });
+
+        JPanel bottomPanel = new JPanel();
+        bottomPanel.add(reiniciarButton);
+        add(bottomPanel, BorderLayout.SOUTH);
+
+        pack();
+        setLocationRelativeTo(null);
+        setVisible(true);
+    }
+
+    public void mostrarVitoria(TimerLabel timerLabel) {
+        timerLabel.stop();
+        Object[] opcoes = {"Reiniciar", "Fechar"};
+        int escolha = JOptionPane.showOptionDialog(
+                this,
+                "Parabéns! Você venceu!",
+                "Vitória",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.INFORMATION_MESSAGE,
+                null,
+                opcoes,
+                opcoes[0]
+        );
+
+        if (escolha == JOptionPane.YES_OPTION) {
+            dispose();
+            new StartScreen();
+        } else {
+            System.exit(0);
+        }
+    }
+}
+
+class TimerLabel extends JLabel {
+    private javax.swing.Timer timer;
+    private int seconds;
+
+    public TimerLabel() {
+        setFont(new Font("Arial", Font.BOLD, 20));
+        setHorizontalAlignment(SwingConstants.CENTER);
+        seconds = 0;
+        timer = new javax.swing.Timer(1000, e -> {
+            seconds++;
+            setText("Tempo: " + seconds + "s");
+        });
+        timer.start();
+    }
+
+    public void stop() {
+        timer.stop();
+    }
+
+    public void reset() {
+        seconds = 0;
+        setText("Tempo: 0s");
+        timer.restart();
+    }
+}
+
+class NumpuzPanel extends JPanel {
+    private final int SIZE;
+    private JButton[][] buttons;
+    private int[][] board;
+    private TimerLabel timerLabel;
+    private NumpuzFrame frame;
+
+    public NumpuzPanel(TimerLabel timerLabel, int size, NumpuzFrame frame) {
+        this.SIZE = size;
+        this.timerLabel = timerLabel;
+        this.frame = frame;
+
+        this.buttons = new JButton[SIZE][SIZE];
+        this.board = new int[SIZE][SIZE];
+
+        setLayout(new GridLayout(SIZE, SIZE));
+        setPreferredSize(new Dimension(SIZE * 100, SIZE * 100));
+
+        initBoard();
+    }
+
+    private void initBoard() {
+        List<Integer> nums = new ArrayList<>();
+        for (int i = 1; i < SIZE * SIZE; i++) {
+            nums.add(i);
+        }
+        nums.add(0); // Espaço vazio
+
+        do {
+            Collections.shuffle(nums);
+        } while (!isSolvable(nums));
+
+        Iterator<Integer> it = nums.iterator();
+        for (int i = 0; i < SIZE; i++) {
+            for (int j = 0; j < SIZE; j++) {
+                int value = it.next();
+                board[i][j] = value;
+                JButton btn = new JButton(value == 0 ? "" : String.valueOf(value));
+                btn.setFont(new Font("Arial", Font.BOLD, 24));
+                final int row = i;
+                final int col = j;
+                btn.addActionListener(e -> moverPeca(row, col));
+                buttons[i][j] = btn;
+                add(btn);
+            }
+        }
+    }
+
+    private boolean isSolvable(List<Integer> tiles) {
+        int inversions = 0;
+        for (int i = 0; i < tiles.size(); i++) {
+            for (int j = i + 1; j < tiles.size(); j++) {
+                int a = tiles.get(i);
+                int b = tiles.get(j);
+                if (a != 0 && b != 0 && a > b) inversions++;
+            }
+        }
+        int blankRow = tiles.indexOf(0) / SIZE;
+        return (inversions + blankRow) % 2 == 0;
+    }
+
+    private void moverPeca(int row, int col) {
+        int[] dx = {0, 0, 1, -1};
+        int[] dy = {1, -1, 0, 0};
+
+        for (int dir = 0; dir < 4; dir++) {
+            int ni = row + dx[dir];
+            int nj = col + dy[dir];
+            if (ni >= 0 && ni < SIZE && nj >= 0 && nj < SIZE && board[ni][nj] == 0) {
+                swap(row, col, ni, nj);
+                updateButtons();
+                if (checkWin()) {
+                    frame.mostrarVitoria(timerLabel);
+                }
+                return;
+            }
+        }
+    }
+
+    private void swap(int i1, int j1, int i2, int j2) {
+        int temp = board[i1][j1];
+        board[i1][j1] = board[i2][j2];
+        board[i2][j2] = temp;
+    }
+
+    private void updateButtons() {
+        for (int i = 0; i < SIZE; i++) {
+            for (int j = 0; j < SIZE; j++) {
+                int num = board[i][j];
+                buttons[i][j].setText(num == 0 ? "" : String.valueOf(num));
+            }
+        }
+    }
+
+    private boolean checkWin() {
+        int count = 1;
+        for (int i = 0; i < SIZE; i++) {
+            for (int j = 0; j < SIZE; j++) {
+                if (i == SIZE - 1 && j == SIZE - 1) return board[i][j] == 0;
+                if (board[i][j] != count++) return false;
+            }
+        }
+        return true;
+    }
+}
